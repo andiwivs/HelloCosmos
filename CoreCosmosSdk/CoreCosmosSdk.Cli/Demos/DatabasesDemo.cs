@@ -1,8 +1,8 @@
-﻿using Microsoft.Azure.Cosmos;
-using System;
+﻿using System;
 using System.Threading.Tasks;
+using Microsoft.Azure.Cosmos;
 
-namespace CoreCosmosSdk.Cli
+namespace CoreCosmosSdk.Cli.Demos
 {
     public static class DatabasesDemo
     {

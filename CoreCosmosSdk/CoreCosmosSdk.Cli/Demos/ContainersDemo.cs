@@ -1,8 +1,8 @@
-﻿using Microsoft.Azure.Cosmos;
-using System;
+﻿using System;
 using System.Threading.Tasks;
+using Microsoft.Azure.Cosmos;
 
-namespace CoreCosmosSdk.Cli
+namespace CoreCosmosSdk.Cli.Demos
 {
     public static class ContainersDemo
     {
@@ -25,16 +25,6 @@ namespace CoreCosmosSdk.Cli
             await ViewContainers(client);
 
             await DeleteTemporaryDatabase(client);
-        }
-
-        private static async Task EnsureTemporaryDatabaseExists(CosmosClient client)
-        {
-            Console.WriteLine($"Creating database {TemporaryDatabaseId} (if not exists)");
-
-            var result = await client.CreateDatabaseIfNotExistsAsync(TemporaryDatabaseId);
-            var database = result.Resource;
-
-            Console.WriteLine($"Database Id: {database.Id}; Modified: {database.LastModified}");
         }
 
         private static async Task ViewContainers(CosmosClient client)
@@ -102,11 +92,28 @@ namespace CoreCosmosSdk.Cli
             Console.WriteLine($"Deleted Container {containerId} from {TemporaryDatabaseId}");
         }
 
+        #region setup and teardown helpers
+
+        private static async Task EnsureTemporaryDatabaseExists(CosmosClient client)
+        {
+            Console.WriteLine($"Creating database {TemporaryDatabaseId} (if not exists)");
+
+            var result = await client.CreateDatabaseIfNotExistsAsync(TemporaryDatabaseId);
+            var database = result.Resource;
+
+            Console.WriteLine($"Database Id: {database.Id}; Modified: {database.LastModified}");
+        }
+
         private static async Task DeleteTemporaryDatabase(CosmosClient client)
         {
+            Console.WriteLine();
+            Console.WriteLine($"Deleting database {TemporaryDatabaseId}...");
+
             await client.GetDatabase(TemporaryDatabaseId).DeleteAsync();
 
             Console.WriteLine($"Database {TemporaryDatabaseId} has been deleted");
         }
+
+        #endregion
     }
 }

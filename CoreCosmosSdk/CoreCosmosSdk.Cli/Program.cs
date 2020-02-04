@@ -1,4 +1,5 @@
-﻿using Microsoft.Azure.Cosmos;
+﻿using CoreCosmosSdk.Cli.Demos;
+using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Threading.Tasks;
@@ -21,7 +22,8 @@ namespace CoreCosmosSdk.Cli
                 //QueryForDocuments(client).Wait();
 
                 //DatabasesDemo.Run(client).Wait();
-                ContainersDemo.Run(client).Wait();
+                //ContainersDemo.Run(client).Wait();
+                DocumentsDemo.Run(client).Wait();
             }
         }
 
