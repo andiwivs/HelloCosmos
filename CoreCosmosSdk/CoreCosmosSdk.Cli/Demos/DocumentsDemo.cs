@@ -10,18 +10,22 @@ namespace CoreCosmosSdk.Cli.Demos
     public static class DocumentsDemo
     {
         private static readonly string TemporaryDatabaseId = "MyTempDb";
-        private static readonly string TemporaryContainerId = "MyContainer1";
+        private static readonly string CustomerContainerId = "Customers";
+        private static readonly string ProductContainerId = "Products";
 
         public static async Task Run(CosmosClient client)
         {
             await EnsureTemporaryDatabaseExists(client);
-            await EnsureTemporaryContainerExists(client);
+            await EnsureContainerExists(client, CustomerContainerId);
+            await EnsureContainerExists(client, ProductContainerId);
+
+            await PopulateProducts(client);
 
             await CreateDocuments(client);
 
             await QueryDocuments(client);
 
-            //await QueryWithStatefulPaging(client);
+            await QueryWithStatefulPaging(client);
             //await QueryWithStatelessPaging(client);
 
             //await QueryWithStatefulPagingStreamed(client);
@@ -42,7 +46,7 @@ namespace CoreCosmosSdk.Cli.Demos
             Console.WriteLine($">>> Create Documents <<<");
             Console.WriteLine();
 
-            var container = client.GetContainer(TemporaryDatabaseId, TemporaryContainerId);
+            var container = client.GetContainer(TemporaryDatabaseId, CustomerContainerId);
 
             #region create document using dynamic type
 
@@ -119,7 +123,7 @@ namespace CoreCosmosSdk.Cli.Demos
             Console.WriteLine($">>> Query Documents (SQL) <<<");
             Console.WriteLine();
 
-            var container = client.GetContainer(TemporaryDatabaseId, TemporaryContainerId);
+            var container = client.GetContainer(TemporaryDatabaseId, CustomerContainerId);
 
             Console.WriteLine("Querying for new customer documents (SQL)");
             Console.WriteLine();
@@ -173,6 +177,67 @@ namespace CoreCosmosSdk.Cli.Demos
             #endregion
         }
 
+        private static async Task QueryWithStatefulPaging(CosmosClient client)
+        {
+            Console.WriteLine();
+            Console.WriteLine($">>> Query Documents (paged results, stateful) <<<");
+            Console.WriteLine();
+
+            var container = client.GetContainer(TemporaryDatabaseId, ProductContainerId);
+            var query = "SELECT * FROM c";
+            int itemCount;
+
+            #region first page of large result set
+
+            Console.WriteLine("Querying for all product documents (first page)");
+
+            var iterator = container.GetItemQueryIterator<Product>(query, requestOptions: new QueryRequestOptions { MaxItemCount = 50 }); // default should be 100 is being ignored?
+
+            var documents = await iterator.ReadNextAsync();
+
+            itemCount = 0;
+
+            foreach (var product in documents)
+            {
+                itemCount++;
+                Console.WriteLine($"#{itemCount} Id: {product.Id}; Name: {product.Name};");
+            }
+
+            Console.WriteLine($"Retrieved {itemCount} documents in first page");
+            Console.WriteLine();
+
+            #endregion
+            
+            #region all pages of large result set (using iterator HasMoreResults)
+
+            Console.WriteLine("Querying for all product documents (full reset set, stateful)");
+
+            var pagedIterator = container.GetItemQueryIterator<Product>(query, requestOptions: new QueryRequestOptions { MaxItemCount = 50 }); // default should be 100 is being ignored?
+
+            itemCount = 0;
+            var pageCount = 0;
+
+            while (pagedIterator.HasMoreResults)
+            {
+                pageCount++;
+
+                Console.WriteLine($"Page index incremented to {pageCount}");
+
+                var pagedDocuments = await pagedIterator.ReadNextAsync();
+
+                foreach (var product in pagedDocuments)
+                {
+                    itemCount++;
+                    Console.WriteLine($"#{itemCount} Id: {product.Id}; Name: {product.Name};");
+                }
+            }
+
+            Console.WriteLine($"Retrieved {itemCount} documents across full result set");
+            Console.WriteLine();
+
+            #endregion
+        }
+
         #region setup and teardown helpers
 
         private static async Task EnsureTemporaryDatabaseExists(CosmosClient client)
@@ -186,21 +251,38 @@ namespace CoreCosmosSdk.Cli.Demos
             Console.WriteLine($"Database Id: {database.Id}; Modified: {database.LastModified}");
         }
 
-        private static async Task EnsureTemporaryContainerExists(CosmosClient client)
+        private static async Task EnsureContainerExists(CosmosClient client, string containerId, int throughput = 400, string partitionKey = "/pk")
         {
             Console.WriteLine();
-            Console.WriteLine($"Creating container {TemporaryContainerId} (if not exists)");
-
-            var partitionKey = "/pk";
-            var throughput = 400;
-
-            var containerProperties = new ContainerProperties(TemporaryContainerId, partitionKey);
+            Console.WriteLine($"Creating container {containerId} (if not exists)");
+            
+            var containerProperties = new ContainerProperties(containerId, partitionKey);
             var database = client.GetDatabase(TemporaryDatabaseId);
 
             var result = await database.CreateContainerIfNotExistsAsync(containerProperties, throughput);
             var container = result.Resource;
 
             Console.WriteLine($"Container Id: {container.Id}; Modified: {container.LastModified}");
+        }
+
+        private static async Task PopulateProducts(CosmosClient client)
+        {
+            var totalNew = 150;
+            var container = client.GetContainer(TemporaryDatabaseId, ProductContainerId);
+
+            for (var idx = 1; idx <= totalNew; idx++)
+            {
+                var productDocument = new Product
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    PartitionKey = "SN83PA",
+                    Name = $"Product {idx}"
+                };
+
+                await container.CreateItemAsync(productDocument, new PartitionKey(productDocument.PartitionKey));
+            }
+
+            Console.WriteLine($"Added {totalNew} product documents");
         }
 
         private static async Task DeleteTemporaryDatabase(CosmosClient client)

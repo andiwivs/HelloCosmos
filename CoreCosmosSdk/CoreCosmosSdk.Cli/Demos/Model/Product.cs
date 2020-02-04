@@ -2,7 +2,7 @@
 
 namespace CoreCosmosSdk.Cli.Demos.Model
 {
-    public class Customer
+    public class Product
     {
         [JsonProperty(PropertyName = "id")]
         public string Id { get; set; }
@@ -12,8 +12,5 @@ namespace CoreCosmosSdk.Cli.Demos.Model
 
         [JsonProperty(PropertyName = "name")]
         public string Name { get; set; }
-
-        [JsonProperty(PropertyName = "address")]
-        public Address Address { get; set; }
     }
 }
