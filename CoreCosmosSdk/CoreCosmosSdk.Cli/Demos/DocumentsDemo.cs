@@ -26,7 +26,7 @@ namespace CoreCosmosSdk.Cli.Demos
             await QueryDocuments(client);
 
             await QueryWithStatefulPaging(client);
-            //await QueryWithStatelessPaging(client);
+            await QueryWithStatelessPaging(client);
 
             //await QueryWithStatefulPagingStreamed(client);
             //await QueryWithStatelessPagingStreamed(client);
@@ -236,6 +236,57 @@ namespace CoreCosmosSdk.Cli.Demos
             Console.WriteLine();
 
             #endregion
+        }
+
+        private static async Task QueryWithStatelessPaging(CosmosClient client)
+        {
+            // with stateless paging you only call "read next" once to get the first page, cosmos returns a continuation token the app can use to request the next page
+            Console.WriteLine();
+            Console.WriteLine($">>> Query all Documents (paged results, stateless) <<<");
+            Console.WriteLine();
+
+            var continuationToken = default(string);
+
+            // this loop simulates a client making consecutive requests, each time passing back the continuation token from the previous request
+            do
+            {
+                continuationToken = await QueryFetchNextPage(client, continuationToken);
+
+            } while (continuationToken != null);
+            
+            Console.WriteLine("Retrieved all documents");
+            Console.WriteLine();
+        }
+
+        private static async Task<string> QueryFetchNextPage(CosmosClient client, string continuationToken)
+        {
+            var container = client.GetContainer(TemporaryDatabaseId, ProductContainerId);
+            var query = "SELECT * FROM c";
+
+            var iterator = container.GetItemQueryIterator<Product>(query, continuationToken, new QueryRequestOptions { MaxItemCount = 50 }); // default should be 100 is being ignored?);
+            var itemCount = 0;
+
+            var pagedProducts = await iterator.ReadNextAsync();
+
+            if (continuationToken != null)
+            {
+                Console.WriteLine($"...resuming with continuation {continuationToken}");
+            }
+
+            foreach (var product in pagedProducts)
+            {
+                itemCount++;
+                Console.WriteLine($"#{itemCount} Id: {product.Id}; Name: {product.Name};");
+            }
+
+            continuationToken = pagedProducts.ContinuationToken;
+
+            if (continuationToken == null)
+            {
+                Console.WriteLine($"...no more continuation, result set complete");
+            }
+
+            return continuationToken;
         }
 
         #region setup and teardown helpers
