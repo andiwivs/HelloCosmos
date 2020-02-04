@@ -19,7 +19,7 @@ namespace CoreCosmosSdk.Cli.Demos
 
             await CreateDocuments(client);
 
-            //await QueryDocuments(client);
+            await QueryDocuments(client);
 
             //await QueryWithStatefulPaging(client);
             //await QueryWithStatelessPaging(client);
@@ -109,6 +109,66 @@ namespace CoreCosmosSdk.Cli.Demos
 
             await container.CreateItemAsync(pocoDocument, new PartitionKey(pocoDocument.PartitionKey));
             Console.WriteLine($"Created new document {pocoDocument.Id} from typed POCO");
+
+            #endregion
+        }
+
+        private static async Task QueryDocuments(CosmosClient client)
+        {
+            Console.WriteLine();
+            Console.WriteLine($">>> Query Documents (SQL) <<<");
+            Console.WriteLine();
+
+            var container = client.GetContainer(TemporaryDatabaseId, TemporaryContainerId);
+
+            Console.WriteLine("Querying for new customer documents (SQL)");
+            Console.WriteLine();
+
+            int count;
+            var query = "SELECT * FROM c WHERE STARTSWITH(c.name, 'New customer') = true"; // note: should avoid running cross-partition queries
+
+            #region Query for dynamic objects
+
+            var dynamicIterator = container.GetItemQueryIterator<dynamic>(query);
+
+            var dynamicDocuments = await dynamicIterator.ReadNextAsync();
+
+            count = 0;
+
+            foreach (var document in dynamicDocuments)
+            {
+                count++;
+                Console.WriteLine($"  #{count} Id: {document.id}; Name: {document.name};");
+
+                // dynamic objects can also be converted to POCOs
+                var customer = JsonConvert.DeserializeObject<Customer>(document.ToString());
+                Console.WriteLine($"    City: {customer.Address?.Location?.City ?? "{{ Unknown }}"}");
+            }
+
+            Console.WriteLine();
+            Console.WriteLine($"Retrieved {count} new documents as dynamic");
+            Console.WriteLine();
+
+            #endregion
+
+            #region Query for defined types (POCOs)
+
+            var typedIterator = container.GetItemQueryIterator<Customer>(query);
+
+            var typedDocuments = await typedIterator.ReadNextAsync();
+
+            count = 0;
+
+            foreach (var customer in typedDocuments)
+            {
+                count++;
+                Console.WriteLine($"  #{count} Id: {customer.Id}; Name: {customer.Name};");
+                Console.WriteLine($"    City: {customer.Address?.Location?.City ?? "{{ Unknown }}"}");
+            }
+
+            Console.WriteLine();
+            Console.WriteLine($"Retrieved {count} new documents as Customer (POCO)");
+            Console.WriteLine();
 
             #endregion
         }
