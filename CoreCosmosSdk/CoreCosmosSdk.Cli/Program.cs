@@ -20,7 +20,8 @@ namespace CoreCosmosSdk.Cli
             {
                 //QueryForDocuments(client).Wait();
 
-                DatabasesDemo.Run(client).Wait();
+                //DatabasesDemo.Run(client).Wait();
+                ContainersDemo.Run(client).Wait();
             }
         }
 

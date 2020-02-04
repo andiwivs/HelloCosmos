@@ -6,7 +6,7 @@ namespace CoreCosmosSdk.Cli
 {
     public static class DatabasesDemo
     {
-        private static readonly string TemporaryDatabaseName = "MyTempDb";
+        private static readonly string TemporaryDatabaseId = "MyTempDb";
 
         public static async Task Run(CosmosClient client)
         {
@@ -43,9 +43,9 @@ namespace CoreCosmosSdk.Cli
         private static async Task CreateDatabase(CosmosClient client)
         {
             Console.WriteLine();
-            Console.WriteLine($">>> Create Database {TemporaryDatabaseName} <<<");
+            Console.WriteLine($">>> Create Database {TemporaryDatabaseId} <<<");
 
-            var result = await client.CreateDatabaseIfNotExistsAsync(TemporaryDatabaseName);
+            var result = await client.CreateDatabaseIfNotExistsAsync(TemporaryDatabaseId);
             var database = result.Resource;
 
             Console.WriteLine($"Database Id: {database.Id}; Modified: {database.LastModified}");
@@ -54,9 +54,9 @@ namespace CoreCosmosSdk.Cli
         private static async Task DeleteDatabase(CosmosClient client)
         {
             Console.WriteLine();
-            Console.WriteLine($">>> Delete Database {TemporaryDatabaseName} <<<");
+            Console.WriteLine($">>> Delete Database {TemporaryDatabaseId} <<<");
 
-            await client.GetDatabase(TemporaryDatabaseName).DeleteAsync();
+            await client.GetDatabase(TemporaryDatabaseId).DeleteAsync();
         }
     }
 }
