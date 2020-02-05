@@ -3,6 +3,7 @@ using Microsoft.Azure.Cosmos;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace CoreCosmosSdk.Cli.Demos
@@ -25,11 +26,13 @@ namespace CoreCosmosSdk.Cli.Demos
 
             await QueryDocuments(client);
 
+            // with regular queries, cosmos loads the raw data from the db, deserializes into resource objects, then serializes to JSON for return (consuming higher CPU)
             await QueryWithStatefulPaging(client);
             await QueryWithStatelessPaging(client);
 
-            //await QueryWithStatefulPagingStreamed(client);
-            //await QueryWithStatelessPagingStreamed(client);
+            // we can also stream the raw data from the db directly to the consumer, avoiding the extra overhead
+            await QueryWithStatefulPagingStreamed(client);
+            await QueryWithStatelessPagingStreamed(client);
 
             //QueryWithLinq();
 
@@ -269,9 +272,7 @@ namespace CoreCosmosSdk.Cli.Demos
             var pagedProducts = await iterator.ReadNextAsync();
 
             if (continuationToken != null)
-            {
                 Console.WriteLine($"...resuming with continuation {continuationToken}");
-            }
 
             foreach (var product in pagedProducts)
             {
@@ -282,9 +283,105 @@ namespace CoreCosmosSdk.Cli.Demos
             continuationToken = pagedProducts.ContinuationToken;
 
             if (continuationToken == null)
-            {
                 Console.WriteLine($"...no more continuation, result set complete");
+
+            return continuationToken;
+        }
+
+        private static async Task QueryWithStatefulPagingStreamed(CosmosClient client)
+        {
+            Console.WriteLine();
+            Console.WriteLine($">>> Query Documents with stateful paging, streamed <<<");
+            Console.WriteLine();
+
+            var container = client.GetContainer(TemporaryDatabaseId, ProductContainerId);
+            var query = "SELECT * FROM c";
+
+            // get all pages of large result set using HasMoreResults
+            Console.WriteLine($"Querying for all documents (full result set, stateful, with streaming iterator");
+
+            var streamIterator = container.GetItemQueryStreamIterator(query, requestOptions: new QueryRequestOptions { MaxItemCount = 50 });
+            var itemCount = 0;
+            var pageCount = 0;
+
+            while (streamIterator.HasMoreResults)
+            {
+                pageCount++;
+
+                var results = await streamIterator.ReadNextAsync();
+                var stream = results.Content;
+
+                using (var sr = new StreamReader(stream))
+                {
+                    var json = await sr.ReadToEndAsync();
+                    var jobj = JsonConvert.DeserializeObject<JObject>(json);
+                    var jarr = (JArray) jobj["Documents"];
+
+                    foreach (var item in jarr)
+                    {
+                        itemCount++;
+                        var customer = JsonConvert.DeserializeObject<Product>(item.ToString());
+                        Console.WriteLine($"({pageCount}.{itemCount}) Id: {customer.Id}; Name: {customer.Name};");
+                    }
+                }
             }
+
+            Console.WriteLine($"Retrieved {itemCount} documents (full result set, stateful, with streaming iterator");
+            Console.WriteLine();
+        }
+
+        private static async Task QueryWithStatelessPagingStreamed(CosmosClient client)
+        {
+            Console.WriteLine();
+            Console.WriteLine($">>> Query Documents with stateless paging, streamed <<<");
+            Console.WriteLine();
+
+            var continuationToken = default(string);
+
+            // this loop simulates a client making consecutive requests, each time passing back the continuation token from the previous request
+            do
+            {
+                continuationToken = await QueryFetchNextPageStreamed(client, continuationToken);
+
+            } while (continuationToken != null);
+
+            Console.WriteLine("Retrieved all documents (full result set, stateless, with streaming iterator");
+            Console.WriteLine();
+        }
+
+        private static async Task<string> QueryFetchNextPageStreamed(CosmosClient client, string continuationToken)
+        {
+            var container = client.GetContainer(TemporaryDatabaseId, ProductContainerId);
+            var query = "SELECT * FROM c";
+
+            var streamIterator = container.GetItemQueryStreamIterator(query, continuationToken, requestOptions: new QueryRequestOptions { MaxItemCount = 50 });
+            var itemCount = 0;
+
+            var response = await streamIterator.ReadNextAsync();
+
+            if (continuationToken != null)
+                Console.WriteLine($"...resuming with continuation {continuationToken}");
+
+            var stream = response.Content;
+
+            using (var sr = new StreamReader(stream))
+            {
+                var json = await sr.ReadToEndAsync();
+                var jobj = JsonConvert.DeserializeObject<JObject>(json);
+                var jarr = (JArray)jobj["Documents"];
+
+                foreach (var item in jarr)
+                {
+                    itemCount++;
+                    var customer = JsonConvert.DeserializeObject<Product>(item.ToString());
+                    Console.WriteLine($"({itemCount}) Id: {customer.Id}; Name: {customer.Name};");
+                }
+            }
+
+            continuationToken = response.Headers.ContinuationToken;
+
+            if (continuationToken == null)
+                Console.WriteLine($"...no more continuation, result set complete");
 
             return continuationToken;
         }
