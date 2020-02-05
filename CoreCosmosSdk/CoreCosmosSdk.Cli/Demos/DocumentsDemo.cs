@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace CoreCosmosSdk.Cli.Demos
@@ -34,11 +35,11 @@ namespace CoreCosmosSdk.Cli.Demos
             await QueryWithStatefulPagingStreamed(client);
             await QueryWithStatelessPagingStreamed(client);
 
-            //QueryWithLinq();
+            QueryWithLinq(client);
 
-            //await ReplaceDocuments();
+            //await ReplaceDocuments(client);
 
-            //await DeleteDocuments();
+            //await DeleteDocuments(client);
 
             await DeleteTemporaryDatabase(client);
         }
@@ -386,6 +387,39 @@ namespace CoreCosmosSdk.Cli.Demos
             return continuationToken;
         }
 
+        private static void QueryWithLinq(CosmosClient client)
+        {
+            Console.WriteLine();
+            Console.WriteLine($">>> Query Documents (LINQ) <<<");
+            Console.WriteLine();
+
+            int minStockLevel = 70;
+
+            Console.WriteLine($"Querying for products having stock level >= {minStockLevel}");
+            var container = client.GetContainer(TemporaryDatabaseId, ProductContainerId);
+
+            var documents = container
+                .GetItemLinqQueryable<Product>(allowSynchronousQueryExecution: true)
+                .Where(d => d.StockLevel >= minStockLevel)
+                .Select(d => new
+                {
+                    d.Id,
+                    d.Name,
+                    d.StockLevel
+                })
+                .ToList();
+
+            Console.WriteLine($"Found {documents.Count} products with stock level >= minStockLevel");
+
+            foreach (var document in documents)
+            {
+                var d = document as dynamic;
+                Console.WriteLine($"Id: {d.Id}; Name: {d.Name}; Stock Level: {d.StockLevel};");
+            }
+
+            Console.WriteLine();
+        }
+
         #region setup and teardown helpers
 
         private static async Task EnsureTemporaryDatabaseExists(CosmosClient client)
@@ -424,7 +458,8 @@ namespace CoreCosmosSdk.Cli.Demos
                 {
                     Id = Guid.NewGuid().ToString(),
                     PartitionKey = "SN83PA",
-                    Name = $"Product {idx}"
+                    Name = $"Product {idx}",
+                    StockLevel = 200 - idx
                 };
 
                 await container.CreateItemAsync(productDocument, new PartitionKey(productDocument.PartitionKey));

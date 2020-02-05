@@ -12,5 +12,8 @@ namespace CoreCosmosSdk.Cli.Demos.Model
 
         [JsonProperty(PropertyName = "name")]
         public string Name { get; set; }
+
+        [JsonProperty(PropertyName = "stockLevel")]
+        public int StockLevel { get; set; }
     }
 }
