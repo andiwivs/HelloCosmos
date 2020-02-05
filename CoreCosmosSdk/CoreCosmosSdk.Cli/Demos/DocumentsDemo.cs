@@ -37,9 +37,9 @@ namespace CoreCosmosSdk.Cli.Demos
 
             QueryWithLinq(client);
 
-            //await ReplaceDocuments(client);
+            await ReplaceDocuments(client);
 
-            //await DeleteDocuments(client);
+            await DeleteDocuments(client);
 
             await DeleteTemporaryDatabase(client);
         }
@@ -390,7 +390,7 @@ namespace CoreCosmosSdk.Cli.Demos
         private static void QueryWithLinq(CosmosClient client)
         {
             Console.WriteLine();
-            Console.WriteLine($">>> Query Documents (LINQ) <<<");
+            Console.WriteLine(">>> Query Documents (LINQ) <<<");
             Console.WriteLine();
 
             int minStockLevel = 70;
@@ -417,6 +417,72 @@ namespace CoreCosmosSdk.Cli.Demos
                 Console.WriteLine($"Id: {d.Id}; Name: {d.Name}; Stock Level: {d.StockLevel};");
             }
 
+            Console.WriteLine();
+        }
+
+        private static async Task ReplaceDocuments(CosmosClient client)
+        {
+            async Task PerformVersionCheck(Container iContainer)
+            {
+                Console.WriteLine("Querying for documents that require an update...");
+                var iQuery = "SELECT VALUE COUNT(c) FROM c WHERE c.documentVersion = 1";
+                var iCount = (await (iContainer.GetItemQueryIterator<int>(iQuery)).ReadNextAsync()).First();
+                Console.WriteLine($"Documents at version 1: {iCount}");
+                Console.WriteLine();
+            };
+
+            Console.WriteLine();
+            Console.WriteLine(">>> Replace Documents <<<");
+            Console.WriteLine();
+
+            var container = client.GetContainer(TemporaryDatabaseId, ProductContainerId);
+
+            await PerformVersionCheck(container);
+
+            Console.WriteLine("Querying for documents to update");
+            var query = "SELECT * FROM c WHERE c.documentVersion = 1";
+            var documents = (await (container.GetItemQueryIterator<dynamic>(query)).ReadNextAsync()).ToList();
+            Console.WriteLine($"Found {documents.Count} documents to be updated");
+
+            foreach (var document in documents)
+            {
+                document.documentVersion = 2;
+                var result = await container.ReplaceItemAsync<dynamic>(document, (string) document.id);
+                var updatedDocument = result.Resource;
+                Console.WriteLine($"Updated document Id: {updatedDocument.id}; Version: {updatedDocument.documentVersion};");
+            }
+
+            Console.WriteLine();
+
+            await PerformVersionCheck(container);
+        }
+
+        private static async Task DeleteDocuments(CosmosClient client)
+        {
+
+            Console.WriteLine();
+            Console.WriteLine(">>> Delete Documents <<<");
+            Console.WriteLine();
+
+            var container = client.GetContainer(TemporaryDatabaseId, ProductContainerId);
+
+            Console.WriteLine("Querying for documents to be deleted");
+            var query = "SELECT c.id, c.pk, c.stockLevel FROM c WHERE c.stockLevel < 75";
+            var iterator = container.GetItemQueryIterator<dynamic>(query);
+            var documents = (await iterator.ReadNextAsync()).ToList();
+            Console.WriteLine($"Found {documents.Count} documents to be deleted");
+
+            foreach (var document in documents)
+            {
+                string id = document.id;
+                string pk = document.pk;
+
+                Console.WriteLine($"Deleting document Id: {document.id}; Stock level: {document.stockLevel};");
+
+                await container.DeleteItemAsync<dynamic>(id, new PartitionKey(pk));
+            }
+
+            Console.WriteLine($"Deleted {documents.Count} documents with low stock level");
             Console.WriteLine();
         }
 
@@ -457,9 +523,10 @@ namespace CoreCosmosSdk.Cli.Demos
                 var productDocument = new Product
                 {
                     Id = Guid.NewGuid().ToString(),
-                    PartitionKey = "SN83PA",
+                    PartitionKey = $"product/{idx}",
                     Name = $"Product {idx}",
-                    StockLevel = 200 - idx
+                    StockLevel = 200 - idx,
+                    DocumentVersion = 1
                 };
 
                 await container.CreateItemAsync(productDocument, new PartitionKey(productDocument.PartitionKey));
